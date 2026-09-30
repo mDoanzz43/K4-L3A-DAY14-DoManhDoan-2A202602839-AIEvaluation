@@ -153,7 +153,6 @@ class RAGASEvaluator:
     def evaluate_faithfulness(self, answer: str, context: str) -> float:
         """
         Measure how grounded the answer is in the context.
-        Tỷ lệ thông tin trong câu trả lời trong context
 
         Heuristic:
             answer_tokens = _tokenize(answer)
@@ -164,7 +163,6 @@ class RAGASEvaluator:
         Returns:
             float in [0.0, 1.0] — 1.0 = fully grounded in context.
         """
-
         answer_tokens = _tokenize(answer)
         if not answer_tokens:
             return 1.0
@@ -174,7 +172,6 @@ class RAGASEvaluator:
     def evaluate_relevance(self, answer: str, question: str) -> float:
         """
         Measure how relevant the answer is to the question.
-        Tỷ lệ thông tin trong câu hỏi có trong câu trả lời
 
         Heuristic:
             relevance = |answer_tokens ∩ question_tokens| / |question_tokens|
@@ -191,8 +188,7 @@ class RAGASEvaluator:
 
     def evaluate_completeness(self, answer: str, expected: str) -> float:
         """
-        Measure how well the answer covers the expected answer. 
-        Tỷ lệ thông tin trong expected answer có trong câu trả lời
+        Measure how well the answer covers the expected answer.
 
         Heuristic:
             completeness = |answer_tokens ∩ expected_tokens| / |expected_tokens|
@@ -218,7 +214,7 @@ class RAGASEvaluator:
     def evaluate_context_recall(self, contexts: list[str], expected: str) -> float:
         """Context Recall — how much of the expected answer is covered by the
         UNION of retrieved chunks.
-        Tỷ lệ thông tin trong expected answer có trong retrieved chunks
+
         Heuristic:
             union_tokens = ⋃ _tokenize(chunk) for chunk in contexts
             recall = |expected_tokens ∩ union_tokens| / |expected_tokens|
@@ -243,8 +239,7 @@ class RAGASEvaluator:
     ) -> float:
         """Context Precision — RANK-AWARE Average Precision (AP@K), like RAGAS.
         Rewards retrievers that place RELEVANT chunks BEFORE noise.
-        Tỷ lệ thông tin trong retrieved chunks có trong expected answer
-        
+
         Steps:
             1. A chunk is "relevant" if it covers >= relevance_threshold of the
                expected tokens:  |chunk ∩ expected| / |expected| >= threshold
@@ -255,26 +250,21 @@ class RAGASEvaluator:
         Reordering relevant chunks earlier (reranking) raises this score.
         """
         expected_tokens = _tokenize(expected)
-        if not expected_tokens:
+        if len(expected_tokens) == 0:
             return 1.0
-        if not contexts:
-            return 0.0
-        relevant_flags = [
-            len(_tokenize(chunk) & expected_tokens) / len(expected_tokens)
-            >= relevance_threshold
-            for chunk in contexts
-        ]
-        relevant_count = sum(relevant_flags)
+        relevant_count = 0
+        precisions = []
+        for k, chunk in enumerate(contexts, 1):
+            chunk_tokens = _tokenize(chunk)
+            intersection = expected_tokens.intersection(chunk_tokens)
+            recall = len(intersection) / len(expected_tokens)
+            is_relevant = recall >= relevance_threshold
+            if is_relevant:
+                relevant_count += 1
+                precisions.append(relevant_count / k)
         if relevant_count == 0:
             return 0.0
-        relevant_so_far = 0
-        precision_sum = 0.0
-        for rank, is_relevant in enumerate(relevant_flags, start=1):
-            if is_relevant:
-                relevant_so_far += 1
-                precision_sum += relevant_so_far / rank
-        score = precision_sum / relevant_count
-        return max(0.0, min(1.0, score))
+        return sum(precisions) / relevant_count
 
     def run_full_eval(
         self,
@@ -383,8 +373,8 @@ def rerank_by_overlap(contexts: list[str], query: str) -> list[str]:
 class LLMJudge:
     """
     Uses an LLM to score AI responses according to a rubric.
-    """
-
+        """
+        
     def __init__(self, judge_llm_fn: Callable[[str], str]) -> None:
         self.judge_llm_fn = judge_llm_fn
 

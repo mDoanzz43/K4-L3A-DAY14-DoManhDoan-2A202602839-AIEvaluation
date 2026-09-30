@@ -168,7 +168,7 @@ class RAGASEvaluator:
             return 1.0
         score = len(answer_tokens & _tokenize(context)) / len(answer_tokens)
         return max(0.0, min(1.0, score))
-        
+
     def evaluate_relevance(self, answer: str, question: str) -> float:
         """
         Measure how relevant the answer is to the question.
