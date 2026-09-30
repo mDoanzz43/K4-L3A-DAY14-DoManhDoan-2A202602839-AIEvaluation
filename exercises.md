@@ -135,8 +135,8 @@ Kiểm tra:
 pytest tests/ -v
 ```
 
-`rerank_by_overlap()` là TODO bonus của Exercise 3.5. Test tương ứng được skip
-nếu bạn chưa làm bonus.
+`rerank_by_overlap()` của Exercise 3.5 đã được hoàn thiện; test bonus hiện chạy
+thay vì bị skip.
 
 ---
 
@@ -257,7 +257,7 @@ Chọn 3–5 dimensions:
 - [x] Actionability
 - [x] Safety/privacy
 - [ ] Tone/clarity
-- [ ] Dimension khác: __________
+- [ ] Dimension khác: Không sử dụng
 
 | Score | Tiêu chí domain-specific | Ví dụ response |
 |---:|---|---|
@@ -292,19 +292,28 @@ verbosity bias và self-preference bằng cách nào?
 Chỉ làm sau khi hoàn thành 3.1–3.3. Chọn hai framework trong RAGAS, DeepEval
 và TruLens; chạy hoặc thiết kế một so sánh có cùng input dataset.
 
-| Tiêu chí | Framework 1: ____ | Framework 2: ____ |
+| Tiêu chí | Framework 1: RAGAS | Framework 2: DeepEval |
 |---|---|---|
-| Setup complexity | | |
-| Metrics available | | |
-| CI/CD integration | | |
-| Kết quả trên cùng dataset | | |
-| Insight rút ra | | |
+| Setup complexity | Chuẩn hóa 20 records thành question, answer, retrieved contexts và reference answer; cấu hình evaluator LLM/embeddings. Phù hợp đánh giá dataset theo batch. | Chuyển mỗi record thành test case và gắn metrics/threshold; thuận tiện tổ chức assertion theo từng case nhưng cần cấu hình model đánh giá. |
+| Metrics available | Faithfulness, Answer Relevancy, Context Recall và Context Precision; bổ sung completeness theo rubric riêng nếu cần. | Faithfulness, Answer Relevancy, Contextual Recall/Precision và GEval rubric cho completeness, safety/privacy. |
+| CI/CD integration | Chạy evaluation batch, lưu JSON, rồi fail quality gate nếu average giảm hơn 0.05 hoặc critical case fail. | Chạy test cases bằng assertions; fail pipeline theo threshold từng metric hoặc từng case. |
+| Kết quả trên cùng dataset | Thiết kế chạy trên đúng 20 questions, actual answers và retrieved contexts hiện có; xuất metric theo ID và aggregate. | Dùng cùng 20 inputs và cùng judge model. Không dùng số liệu giả: lượt lab hiện tại mới chạy heuristic RAGAS-inspired, chưa chạy package DeepEval. |
+| Insight rút ra | Phù hợp phân tích retrieval/generation trên toàn benchmark và theo dõi aggregate trend. | Phù hợp biểu diễn policy/safety cases thành regression tests có pass/fail rõ ràng. |
 
 - Scores có nhất quán không?
 - Framework nào strict hơn và vì sao?
 - Hai framework có tìm ra cùng failure cases không?
 
-> *Phân tích:*
+> *Phân tích:* Protocol công bằng là cố định dataset, actual answers, retrieved
+> chunks, evaluator model, temperature và rubric; chạy mỗi framework ít nhất ba
+> lần rồi so sánh correlation, mean absolute difference, pass/fail agreement và
+> top-3 failures. Chưa thể kết luận scores nhất quán hoặc framework nào strict
+> hơn nếu chưa chạy cả hai, nên không điền số giả. Giả thuyết cần kiểm chứng là
+> hai framework sẽ cùng phát hiện A01–A03 là khó, nhưng GEval domain rubric của
+> DeepEval có thể đánh giá safe refusal theo ngữ nghĩa khác metric RAG chuẩn.
+> “Strict hơn” phải được kết luận từ cùng thresholds và human labels, không từ
+> tên framework. Nếu hai framework bất đồng, human review trace/gold evidence là
+> trọng tài và các case bất đồng trở thành calibration set.
 
 ### Exercise 3.5 — Retrieval Reranking (Bonus +5)
 
@@ -319,20 +328,30 @@ thay đổi Context Recall hay không.
 
 | ID | Recall before | Recall after | Precision before | Precision after | Delta Precision |
 |---|---:|---:|---:|---:|---:|
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| **Avg** | | | | | |
+| M04 | 0.971 | 0.971 | 0.867 | 1.000 | +0.133 |
+| H03 | 0.683 | 0.683 | 0.888 | 1.000 | +0.113 |
+| M05 | 0.767 | 0.767 | 0.750 | 0.833 | +0.083 |
+| M07 | 0.884 | 0.884 | 0.888 | 0.950 | +0.063 |
+| E01 | 0.903 | 0.903 | 0.700 | 0.750 | +0.050 |
+| **Avg** | **0.841** | **0.841** | **0.818** | **0.907** | **+0.088** |
 
 **Tại sao Recall dự kiến không đổi?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Recall dùng union token của toàn bộ retrieved chunks. Reranker
+> chỉ đổi thứ tự, không thêm hoặc xóa chunk, nên union không đổi và Recall trước/
+> sau phải bằng nhau. Ngược lại, Average Precision có xét rank: đưa chunk relevant
+> lên sớm làm Precision@k và AP@K tăng. Đo trên năm traces thật cho thấy Recall
+> giữ nguyên 0.841 còn Precision tăng trung bình 0.088.
 
 **Khi nào reranking không đủ và cần sửa retriever/query/chunking?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Reranking không đủ khi retriever chưa lấy được evidence đúng,
+> query dùng từ khác domain, chunk cắt mất điều kiện quan trọng hoặc corpus thiếu/
+> sai version. A01 là bằng chứng: tập chunks không có `00_system_scope.md`, nên
+> đổi thứ tự không thể tăng Recall và overlap reranker còn làm Precision giảm từ
+> 1.000 xuống 0.500. Khi đó cần intent routing/query expansion, hybrid retrieval,
+> sửa chunking/metadata filtering hoặc bổ sung corpus; reranker chỉ tối ưu thứ tự
+> của một candidate set đã có evidence.
 
 ---
 
@@ -346,11 +365,11 @@ Hoàn thành `reflection.md` bằng kết quả thật từ Exercise 3.2.
 
 Hoàn thành kiểm tra cuối trong khoảng 16:50–17:00.
 
-- [ ] Tất cả required tests pass.
-- [ ] `golden_dataset.json` validate thành công.
-- [ ] Exercise 3.1 hoàn thành trong file JSON và bảng kết quả phía trên.
-- [ ] Exercise 3.2 có năm metrics, aggregate report và ba cases thấp nhất.
-- [ ] Exercise 3.3 có rubric 1–5 và bias controls.
-- [ ] `reflection.md` có ba failure analyses và regression strategy.
-- [ ] Đã copy `template.py` thành `solution/solution.py`.
-- [ ] Exercise 3.4 và 3.5 chỉ làm nếu chọn bonus.
+- [x] Tất cả required tests pass (42 passed, bao gồm test reranking bonus).
+- [x] `golden_dataset.json` validate thành công.
+- [x] Exercise 3.1 hoàn thành trong file JSON và bảng kết quả phía trên.
+- [x] Exercise 3.2 có năm metrics, aggregate report và ba cases thấp nhất.
+- [x] Exercise 3.3 có rubric 1–5 và bias controls.
+- [x] `reflection.md` có ba failure analyses và regression strategy.
+- [x] Đã đồng bộ `template.py` với `solution/solution.py`.
+- [x] Đã hoàn thành Exercise 3.4 và 3.5 để lấy bonus.
