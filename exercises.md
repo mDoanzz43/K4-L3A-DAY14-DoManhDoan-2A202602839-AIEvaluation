@@ -30,11 +30,11 @@ critical.
 
 | Metric | Acceptable Low Score Scenario | Critical Low Score Scenario | Action Required |
 |---|---|---|---|
-| Faithfulness | | | |
-| Answer Relevance | | | |
-| Context Recall | | | |
-| Context Precision | | | |
-| Completeness | | | |
+| Faithfulness | Mô hình bổ sung các kiến thức chung chung (vô hại), thêm các từ ngữ để làm tăng tính diễn đạt dù không có sẵn trong context nhưng không làm sai lệch thông tin | Mô hình tự ý bịa đặt, xuyên tạc thông tin (số liệu, dữ liệu...) sai lệch, không có căn cứ - đặc biệt trong các lĩnh vực nhạy cảm như: giáo dục, y học, tài chính, pháp luật... | siết chặt system prompt: "Chỉ trả lời thông tin được lưu trong Context cung cấp, không được bịa thông tin nếu không chắc".<br>Tăng cường few-shot example: cung cấp ví dụ minh họa cho output mong muốn<br>Giảm (temperature) của mô hình để giảm tính sáng tạo |
+| Answer Relevance | Khi câu hỏi của người dùng rất mở và câu trả lời bắt đầu bằng việc giải thích bối cảnh rộng trước khi đi vào trọng tâm, khiến hệ thống đo lường tự động (RAGAS) đánh giá thấp điểm liên quan trực tiếp tạm thời. | Câu trả lời không đi vào trọng tâm câu hỏi mà lạc đề sang chủ đề khác | Cần tinh chỉnh prompt để mô hình trả lời thẳng vào vấn đề hơn, tránh trả lời lan man hoặc diễn giải dài dòng không cần thiết. |
+| Context Recall | Khi thông tin người dùng tìm kiếm nằm rải rác ở nhiều đoạn context khác nhau và hệ thống chỉ retrieve được một phần trong số đó (Ưu tiên chính xác - chất lượng hơn là số lượng trả về) | Hệ thống không retrieve được bất kỳ đoạn context nào chứa thông tin cần thiết để trả lời câu hỏi. | Cải thiện chiến lược chunking, tăng kích thước chunk hoặc sử dụng kỹ thuật re-ranking để ưu tiên các đoạn context chứa từ khóa quan trọng từ câu hỏi |
+| Context Precision | Khi context chứa nhiều thông tin gây nhiễu hoặc thông tin không liên quan đến câu hỏi, làm giảm độ chính xác khi đánh giá mức độ liên quan của retrieved chunks. | Context chứa thông tin sai lệch, mâu thuẫn hoặc không đáng tin cậy, dẫn đến việc mô hình dựa vào sai sót để trả lời. | Cần xử lý dữ liệu trước khi indexing (ví dụ: metadata filtering, semantic filtering, hybrid search) để giảm thiểu việc retrieve các chunks không liên quan |
+| Completeness | Khi câu trả lời bao gồm đầy đủ thông tin cần thiết nhưng được trình bày ngắn gọn, súc tích. | Câu trả lời bị thiếu sót, bỏ qua các phần quan trọng của thông tin cần thiết. | Rà soát lại yêu cầu đầu ra của LLM (ví dụ: bullet points, tóm tắt theo ý chính...) để đảm bảo tính đầy đủ thông tin cần truyền đạt |
 
 ### Exercise 1.2 — Bias trong LLM-as-a-Judge
 
@@ -46,15 +46,21 @@ Ba bias thường gặp:
 
 **Câu 1: Thiết kế experiment phát hiện position bias với ít nhất hai conditions.**
 
-> *Câu trả lời:*
-
+> Để phát hiện position bias ta cung cấp cho Judge cùng 1 câu hỏi với 2 câu trả lời có thứ tự đảo ngược cho nhau.
+> Condition 1: Đưa 2 answer vào prompt theo thứ tự gốc (Answer_A, Answer_B)
+> Condition 2: Đưa 2 answer vào prompt theo thứ tự đảo ngược (Answer_B, Answer_A) - giữ nguyên nội dung
+> Sau đó: Nếu judge liên tục chọn đáp án ở vị trí đầu (Answer_A) thì hệ thống đánh giá có position bias. Nếu không có sự thay đổi đáng kể khi thay đổi vị trí, có thể kết luận hệ thống ít bị ảnh hưởng bởi position bias
 **Câu 2: Làm thế nào giảm verbosity bias bằng rubric design?**
 
-> *Câu trả lời:*
+> Thêm tiêu chí "trình bày súc tích, ngắn gọn" vào rubric desgin và điểm phạt nếu trả lời quá dài dòng không cần thiết. 
+> Yêu cầu Judge chấm theo mật độ thông tin (số ý đúng) thay vì số lượng từ.
+> System prompt: "Không ưu tiên trả lời câu dài: Ưu tiên trả lời ngắn gọn, súc tích"
 
 **Câu 3: Tại sao cần calibrate LLM judge với human labels?**
 
-> *Câu trả lời:*
+> Đo lường độ chính xác: Kiểm tra mức độ đồng thuậngiữa LLM và con người.
+> Khắc phục thiên kiến: Tránh các lỗi như self-preference hoặc đánh giá sai lệch ngữ cảnh thực tế.
+> Cải tiến liên tục: Cung cấp phản hồi cho việc cải tiến hệ thống.
 
 ### Exercise 1.3 — Evaluation trong CI/CD
 
@@ -62,15 +68,15 @@ Ba bias thường gặp:
 
 | Metric | Threshold | Lý do |
 |---|---:|---|
-| Faithfulness | | |
-| Answer Relevance | | |
-| Completeness | | |
+| Faithfulness |>= 0.85 | Rất quan trọng, không chấp nhận bịa đặt thông tin |
+| Answer Relevance |>= 0.8 | Quan trọng, đảm bảo trả lời đúng trọng tâm |
+| Completeness |>= 0.8 | Quan trọng, đảm bảo trả lời đầy đủ thông tin |
 
 **Câu 2: Khi nào dùng offline evaluation, online evaluation và human review?**
 
-> *Câu trả lời:*
-
----
+> Offline evaluation: Dùng trong giai đoạn phát triển và CI/CD trên golden dataset để kiểm thử trước khi deploy product
+> Online evaluation: Dùng trên production với dữ liệu người dùng thực tế để giám sát chất lượng phản hồi
+> Human review: Dùng định kỳ để audit chất lượng, xây dựng golden dataset ban đầu, hoặc đánh giá các trường hợp phức tạp mà mô hình tự động chưa đủ tin cậy
 
 ## Part 2 — Core Coding (14:45–15:40)
 
